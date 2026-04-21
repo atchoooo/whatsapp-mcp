@@ -3,12 +3,11 @@ package main
 import (
 	"net/http"
 	"net/http/httptest"
-	"os"
 	"testing"
 )
 
 func TestRequireAPIKey_NoHeader(t *testing.T) {
-	os.Setenv("API_KEY", "test-secret")
+	t.Setenv("API_KEY", "test-secret")
 	handler := requireAPIKey(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	})
@@ -23,7 +22,7 @@ func TestRequireAPIKey_NoHeader(t *testing.T) {
 }
 
 func TestRequireAPIKey_WrongKey(t *testing.T) {
-	os.Setenv("API_KEY", "test-secret")
+	t.Setenv("API_KEY", "test-secret")
 	handler := requireAPIKey(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	})
@@ -39,7 +38,7 @@ func TestRequireAPIKey_WrongKey(t *testing.T) {
 }
 
 func TestRequireAPIKey_CorrectKey(t *testing.T) {
-	os.Setenv("API_KEY", "test-secret")
+	t.Setenv("API_KEY", "test-secret")
 	handler := requireAPIKey(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	})
@@ -55,7 +54,7 @@ func TestRequireAPIKey_CorrectKey(t *testing.T) {
 }
 
 func TestRequireAPIKey_EmptyEnvAlwaysRejects(t *testing.T) {
-	os.Unsetenv("API_KEY")
+	t.Setenv("API_KEY", "")
 	handler := requireAPIKey(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	})
