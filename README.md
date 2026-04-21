@@ -1,5 +1,8 @@
 # WhatsApp MCP Server
 
+> **Fork:** This is a hardened read-only fork of [lharries/whatsapp-mcp](https://github.com/lharries/whatsapp-mcp).
+> Send tools are removed. The bridge requires `API_KEY` env var. See `UPSTREAM.md` for sync status.
+
 This is a Model Context Protocol (MCP) server for WhatsApp.
 
 With this you can search and read your personal Whatsapp messages (including images, videos, documents, and audio messages), search your contacts and send messages to either individuals or groups. You can also send media files including images, videos, documents, and audio messages.
