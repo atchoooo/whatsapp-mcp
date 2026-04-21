@@ -1,6 +1,7 @@
 package main
 
 import (
+	"crypto/subtle"
 	"net/http"
 	"os"
 )
@@ -10,7 +11,7 @@ import (
 func requireAPIKey(next http.HandlerFunc) http.HandlerFunc {
 	apiKey := os.Getenv("API_KEY")
 	return func(w http.ResponseWriter, r *http.Request) {
-		if apiKey == "" || r.Header.Get("X-API-Key") != apiKey {
+		if apiKey == "" || subtle.ConstantTimeCompare([]byte(r.Header.Get("X-API-Key")), []byte(apiKey)) != 1 {
 			http.Error(w, "Unauthorized", http.StatusUnauthorized)
 			return
 		}

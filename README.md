@@ -36,7 +36,20 @@ Here's an example of what you can do when it's connected to Claude.
    cd whatsapp-mcp
    ```
 
-2. **Run the WhatsApp bridge**
+2. **Set up your API key**
+
+   Copy `.env.example` to `.env` and fill in a random secret:
+   ```bash
+   cp .env.example .env
+   # Edit .env and set API_KEY to a random string
+   ```
+
+   Then export it before running the bridge:
+   ```bash
+   export API_KEY=$(grep API_KEY .env | cut -d= -f2)
+   ```
+
+3. **Run the WhatsApp bridge**
 
    Navigate to the whatsapp-bridge directory and run the Go application:
 
@@ -49,7 +62,7 @@ Here's an example of what you can do when it's connected to Claude.
 
    After approximately 20 days, you will might need to re-authenticate.
 
-3. **Connect to the MCP server**
+4. **Connect to the MCP server**
 
    Copy the below json with the appropriate {{PATH}} values:
 
@@ -81,7 +94,7 @@ Here's an example of what you can do when it's connected to Claude.
    ~/.cursor/mcp.json
    ```
 
-4. **Restart Claude Desktop / Cursor**
+5. **Restart Claude Desktop / Cursor**
 
    Open Claude Desktop and you should now see WhatsApp as an available integration.
 
