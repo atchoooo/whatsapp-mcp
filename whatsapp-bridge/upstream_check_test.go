@@ -16,7 +16,9 @@ func writeTempUpstreamMD(t *testing.T, sha string) string {
 	t.Helper()
 	dir := t.TempDir()
 	path := filepath.Join(dir, "UPSTREAM.md")
-	os.WriteFile(path, []byte("UPSTREAM_COMMIT="+sha+"\n"), 0644)
+	if err := os.WriteFile(path, []byte("UPSTREAM_COMMIT="+sha+"\n"), 0644); err != nil {
+		t.Fatalf("writeTempUpstreamMD: %v", err)
+	}
 	return path
 }
 
@@ -32,7 +34,9 @@ func makeGitHubServer(sha string, date time.Time) *httptest.Server {
 func TestReadPinnedCommit_Found(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "UPSTREAM.md")
-	os.WriteFile(path, []byte("# header\n\nUPSTREAM_COMMIT=abc123\nUPSTREAM_DATE=2026-04-21\n"), 0644)
+	if err := os.WriteFile(path, []byte("# header\n\nUPSTREAM_COMMIT=abc123\nUPSTREAM_DATE=2026-04-21\n"), 0644); err != nil {
+		t.Fatalf("setup: %v", err)
+	}
 
 	sha, err := readPinnedCommit(path)
 	if err != nil {
@@ -46,7 +50,9 @@ func TestReadPinnedCommit_Found(t *testing.T) {
 func TestReadPinnedCommit_Missing(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "UPSTREAM.md")
-	os.WriteFile(path, []byte("# no commit here\n"), 0644)
+	if err := os.WriteFile(path, []byte("# no commit here\n"), 0644); err != nil {
+		t.Fatalf("setup: %v", err)
+	}
 
 	_, err := readPinnedCommit(path)
 	if err == nil {

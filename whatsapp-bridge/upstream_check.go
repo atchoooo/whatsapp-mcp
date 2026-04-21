@@ -87,5 +87,5 @@ func CheckUpstream(upstreamMDPath string, client *http.Client, apiURL string, ou
 	fmt.Fprintf(out, "⚠  Upstream whatsapp-mcp has new commits since your last sync.\n")
 	fmt.Fprintf(out, "   Latest: %s (%s)\n", latest, commit.Commit.Committer.Date.Format("2006-01-02"))
 	fmt.Fprintf(out, "   Pinned: %s\n", pinnedShort)
-	fmt.Fprintf(out, "   Review: https://github.com/lharries/whatsapp-mcp/compare/%s...main\n", pinnedShort)
+	fmt.Fprintf(out, "   Review: https://github.com/lharries/whatsapp-mcp/compare/%s...main\n", pinned)
 }
