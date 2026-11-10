@@ -3,3 +3,4 @@ claude_desktop_config.json
 whatsapp.log
 .env
 whatsapp-bridge/whatsapp-client
+whatsapp-bridge/store/
