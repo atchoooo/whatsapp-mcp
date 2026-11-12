@@ -4,3 +4,4 @@ whatsapp.log
 .env
 whatsapp-bridge/whatsapp-client
 whatsapp-bridge/store/
+.DS_Store
