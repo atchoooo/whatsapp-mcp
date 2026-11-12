@@ -632,6 +632,9 @@ def get_direct_chat_by_contact(sender_phone_number: str) -> Optional[Chat]:
         if 'conn' in locals():
             conn.close()
 
+LAST_DOWNLOAD_ERROR: Optional[str] = None
+
+
 def download_media(message_id: str, chat_jid: str) -> Optional[str]:
     """Download media from a message and return the local file path.
 
@@ -651,24 +654,19 @@ def download_media(message_id: str, chat_jid: str) -> Optional[str]:
 
         response = requests.post(url, json=payload, headers=_bridge_headers())
         
-        if response.status_code == 200:
+        global LAST_DOWNLOAD_ERROR
+        LAST_DOWNLOAD_ERROR = None
+        try:
             result = response.json()
-            if result.get("success", False):
-                path = result.get("path")
-                print(f"Media downloaded successfully: {path}")
-                return path
-            else:
-                print(f"Download failed: {result.get('message', 'Unknown error')}")
-                return None
-        else:
-            print(f"Error: HTTP {response.status_code} - {response.text}")
-            return None
-            
-    except requests.RequestException as e:
-        print(f"Request error: {str(e)}")
+        except ValueError:
+            result = {}
+        if response.status_code == 200 and result.get("success", False):
+            return result.get("path")
+        LAST_DOWNLOAD_ERROR = result.get("message") or f"HTTP {response.status_code} - {response.text}"
         return None
-    except json.JSONDecodeError:
-        print(f"Error parsing response: {response.text}")
+
+    except requests.RequestException as e:
+        LAST_DOWNLOAD_ERROR = f"Request error: {str(e)}"
         return None
     except Exception as e:
         print(f"Unexpected error: {str(e)}")

@@ -171,9 +171,10 @@ def download_media(message_id: str, chat_jid: str) -> Dict[str, Any]:
             "file_path": file_path
         }
     else:
+        import whatsapp as _wa
         return {
             "success": False,
-            "message": "Failed to download media"
+            "message": f"Failed to download media: {_wa.LAST_DOWNLOAD_ERROR or 'unknown error'}"
         }
 
 if __name__ == "__main__":

@@ -15,6 +15,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 
@@ -23,7 +24,10 @@ import (
 
 	"bytes"
 
+	"errors"
+
 	"go.mau.fi/whatsmeow"
+	"go.mau.fi/whatsmeow/proto/waMmsRetry"
 	waProto "go.mau.fi/whatsmeow/binary/proto"
 	"go.mau.fi/whatsmeow/store/sqlstore"
 	"go.mau.fi/whatsmeow/types"
@@ -592,7 +596,7 @@ func downloadMedia(client *whatsmeow.Client, messageStore *MessageStore, message
 	}
 
 	// Generate a local path for the file
-	localPath = fmt.Sprintf("%s/%s", chatDir, filename)
+	localPath = fmt.Sprintf("%s/%s_%s", chatDir, messageID, filename)
 
 	// Get absolute path
 	absPath, err := filepath.Abs(localPath)
@@ -643,6 +647,18 @@ func downloadMedia(client *whatsmeow.Client, messageStore *MessageStore, message
 
 	// Download the media using whatsmeow client
 	mediaData, err := client.Download(context.Background(), downloader)
+	if err != nil && (errors.Is(err, whatsmeow.ErrMediaDownloadFailedWith403) ||
+		errors.Is(err, whatsmeow.ErrMediaDownloadFailedWith404) ||
+		errors.Is(err, whatsmeow.ErrMediaDownloadFailedWith410)) {
+		// The media URL expired (common for history-synced media).
+		// Ask the phone to re-upload it, then download from the new path.
+		fmt.Printf("Media expired (%v), requesting re-upload from phone...\n", err)
+		newPath, retryErr := requestMediaReupload(client, messageStore, messageID, chatJID, mediaKey)
+		if retryErr != nil {
+			return false, "", "", "", fmt.Errorf("media expired and re-upload failed: %v", retryErr)
+		}
+		mediaData, err = client.DownloadMediaWithPath(context.Background(), newPath, fileEncSHA256, fileSHA256, mediaKey, waMediaType, "", false)
+	}
 	if err != nil {
 		return false, "", "", "", fmt.Errorf("failed to download media: %v", err)
 	}
@@ -854,6 +870,10 @@ func main() {
 		case *events.HistorySync:
 			// Process history sync events
 			handleHistorySync(client, messageStore, v, logger)
+
+		case *events.MediaRetry:
+			// Response from the phone to a media re-upload request
+			deliverMediaRetry(v)
 
 		case *events.Connected:
 			logger.Infof("Connected to WhatsApp")
@@ -1372,4 +1392,94 @@ func placeholderWaveform(duration uint32) []byte {
 	}
 
 	return waveform
+}
+
+// --- Media re-upload (media retry) support ---
+
+var (
+	mediaRetryMu      sync.Mutex
+	mediaRetryWaiters = map[string]chan *events.MediaRetry{}
+)
+
+func deliverMediaRetry(evt *events.MediaRetry) {
+	mediaRetryMu.Lock()
+	ch, ok := mediaRetryWaiters[string(evt.MessageID)]
+	mediaRetryMu.Unlock()
+	if ok {
+		select {
+		case ch <- evt:
+		default:
+		}
+	}
+}
+
+func parseStoredJID(s string) (types.JID, error) {
+	if s == "" {
+		return types.EmptyJID, fmt.Errorf("empty JID")
+	}
+	if !strings.Contains(s, "@") {
+		s = s + "@s.whatsapp.net"
+	}
+	return types.ParseJID(s)
+}
+
+// requestMediaReupload asks the phone to re-upload expired media and returns the new direct path.
+// The phone must be online for this to work.
+func requestMediaReupload(client *whatsmeow.Client, messageStore *MessageStore, messageID, chatJID string, mediaKey []byte) (string, error) {
+	var sender string
+	var isFromMe bool
+	if err := messageStore.db.QueryRow(
+		"SELECT sender, is_from_me FROM messages WHERE id = ? AND chat_jid = ?",
+		messageID, chatJID,
+	).Scan(&sender, &isFromMe); err != nil {
+		return "", fmt.Errorf("failed to load message info: %v", err)
+	}
+	chat, err := parseStoredJID(chatJID)
+	if err != nil {
+		return "", fmt.Errorf("invalid chat JID: %v", err)
+	}
+	info := &types.MessageInfo{
+		MessageSource: types.MessageSource{
+			Chat:     chat,
+			IsFromMe: isFromMe,
+			IsGroup:  chat.Server == types.GroupServer,
+		},
+		ID: types.MessageID(messageID),
+	}
+	if info.IsGroup && !isFromMe {
+		if senderJID, err := parseStoredJID(sender); err == nil {
+			info.Sender = senderJID
+		}
+	}
+
+	ch := make(chan *events.MediaRetry, 1)
+	mediaRetryMu.Lock()
+	mediaRetryWaiters[messageID] = ch
+	mediaRetryMu.Unlock()
+	defer func() {
+		mediaRetryMu.Lock()
+		delete(mediaRetryWaiters, messageID)
+		mediaRetryMu.Unlock()
+	}()
+
+	if err := client.SendMediaRetryReceipt(context.Background(), info, mediaKey); err != nil {
+		return "", fmt.Errorf("failed to send re-upload request: %v", err)
+	}
+
+	select {
+	case evt := <-ch:
+		if evt.Error != nil {
+			return "", fmt.Errorf("phone returned an error for the re-upload request (code %d)", evt.Error.Code)
+		}
+		retryData, err := whatsmeow.DecryptMediaRetryNotification(evt, mediaKey)
+		if err != nil {
+			return "", fmt.Errorf("failed to decrypt re-upload response: %v", err)
+		}
+		if retryData.GetResult() != waMmsRetry.MediaRetryNotification_SUCCESS {
+			return "", fmt.Errorf("phone could not re-upload the media (result %s); it may have been deleted from the phone", retryData.GetResult().String())
+		}
+		return retryData.GetDirectPath(), nil
+	case <-time.After(45 * time.Second):
+		return "", fmt.Errorf("timed out waiting for the phone to re-upload the media (is the phone online?)")
+	}
 }
